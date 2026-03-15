@@ -386,24 +386,75 @@ body::after {
 
 /* ── Install banner ─────────────────────────────────────── */
 #install-banner {
-  display: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
   width: 100%; max-width: 440px;
   margin-top: 14px;
   background: rgba(0,102,255,0.1);
-  border: 1px solid rgba(0,102,255,0.25);
+  border: 1px solid rgba(0,102,255,0.3);
   border-radius: 10px;
-  padding: 13px 16px;
+  padding: 14px 18px;
   font-family: var(--font-condensed);
-  font-size: 15px; font-weight: 600;
+  font-size: 16px; font-weight: 600;
   letter-spacing: 0.07em;
   text-transform: uppercase;
   color: var(--text);
   cursor: pointer;
   text-align: center;
-  transition: background 0.2s;
+  transition: background 0.2s, border-color 0.2s, transform 0.1s;
+  position: relative;
+  overflow: hidden;
 }
+#install-banner:hover { background: rgba(0,102,255,0.2); border-color: rgba(0,102,255,0.5); }
+#install-banner:active { transform: scale(0.98); }
+#install-banner.installed { background: rgba(0,229,160,0.07); border-color: rgba(0,229,160,0.2); cursor: default; pointer-events: none; opacity: 0.6; }
 
-#install-banner:hover { background: rgba(0,102,255,0.18); }
+/* Modal instrucciones manuales */
+#install-modal {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.75);
+  z-index: 1000;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0 16px 28px;
+  backdrop-filter: blur(4px);
+}
+#install-modal.open { display: flex; animation: fadeIn 0.2s ease; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+.modal-box {
+  background: #131d2d;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 26px;
+  width: 100%; max-width: 440px;
+}
+.modal-box h3 {
+  font-family: var(--font-condensed);
+  font-size: 19px; font-weight: 700;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  color: white; margin-bottom: 18px;
+}
+.modal-step { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 14px; }
+.step-num {
+  width: 26px; height: 26px; background: var(--blue);
+  border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-condensed); font-size: 13px; font-weight: 700;
+  flex-shrink: 0; margin-top: 2px; color: white;
+}
+.step-txt { font-size: 14px; color: var(--text); line-height: 1.5; }
+.step-txt strong { color: white; }
+.modal-close {
+  width: 100%; margin-top: 20px; padding: 13px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; font-family: var(--font-condensed);
+  font-size: 15px; font-weight: 600; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--muted); cursor: pointer;
+  transition: color 0.2s;
+}
+.modal-close:hover { color: var(--text); }
 
 /* ── Footer ─────────────────────────────────────────────── */
 .footer {
@@ -477,6 +528,26 @@ body::after {
 
 <button id="install-banner" onclick="instalarApp()">📲 Instalar app en este dispositivo</button>
 
+<!-- Modal instrucciones manuales Chrome -->
+<div id="install-modal">
+  <div class="modal-box">
+    <h3>📲 Instalar en Android</h3>
+    <div class="modal-step">
+      <div class="step-num">1</div>
+      <div class="step-txt">Toca el menú de Chrome <strong>⋮</strong> (tres puntos arriba a la derecha)</div>
+    </div>
+    <div class="modal-step">
+      <div class="step-num">2</div>
+      <div class="step-txt">Selecciona <strong>"Añadir a pantalla de inicio"</strong></div>
+    </div>
+    <div class="modal-step">
+      <div class="step-num">3</div>
+      <div class="step-txt">Confirma tocando <strong>"Añadir"</strong> — la app aparecerá en tu pantalla de inicio</div>
+    </div>
+    <button class="modal-close" onclick="cerrarModal()">Entendido</button>
+  </div>
+</div>
+
 <div class="footer">GRUPORVQ · OFFLINE-READY PWA</div>
 
 <script>
@@ -540,16 +611,52 @@ if ('serviceWorker' in navigator) {
 }
 
 let deferredPrompt = null
+
+// Escuchar prompt nativo de Chrome
 window.addEventListener('beforeinstallprompt', e => {
-  e.preventDefault(); deferredPrompt = e
-  document.getElementById('install-banner').style.display = 'block'
+  e.preventDefault()
+  deferredPrompt = e
+  console.log('[PWA] Prompt disponible')
 })
+
 function instalarApp() {
-  if (!deferredPrompt) return
-  deferredPrompt.prompt()
-  deferredPrompt.userChoice.then(() => { deferredPrompt = null; document.getElementById('install-banner').style.display = 'none' })
+  if (deferredPrompt) {
+    // Chrome tiene el prompt nativo — usarlo directo
+    deferredPrompt.prompt()
+    deferredPrompt.userChoice.then(result => {
+      console.log('[PWA] Resultado:', result.outcome)
+      deferredPrompt = null
+      if (result.outcome === 'accepted') {
+        document.getElementById('install-banner').classList.add('installed')
+        document.getElementById('install-banner').textContent = '✅ App instalada'
+      }
+    })
+  } else {
+    // No hay prompt nativo: mostrar instrucciones manuales
+    document.getElementById('install-modal').classList.add('open')
+  }
 }
-window.addEventListener('appinstalled', () => { document.getElementById('install-banner').style.display = 'none' })
+
+function cerrarModal() {
+  document.getElementById('install-modal').classList.remove('open')
+}
+
+// Cerrar modal al tocar fuera
+document.getElementById('install-modal').addEventListener('click', function(e) {
+  if (e.target === this) cerrarModal()
+})
+
+// Ya instalada
+window.addEventListener('appinstalled', () => {
+  console.log('[PWA] App instalada')
+  document.getElementById('install-banner').classList.add('installed')
+  document.getElementById('install-banner').textContent = '✅ App instalada'
+})
+
+// Si ya está corriendo como PWA instalada, ocultar el botón
+if (window.matchMedia('(display-mode: standalone)').matches) {
+  document.getElementById('install-banner').style.display = 'none'
+}
 </script>
 </body>
 </html>
