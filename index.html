@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Medición Tanques</title>
+
+<!-- PWA -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#080c10">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Tanques">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+
+<!-- Fuentes: carga desde red si disponible, fallback a sistema si offline -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;600;700;900&family=Barlow:wght@300;400;500&family=Share+Tech+Mono&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<noscript><link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;600;700;900&family=Barlow:wght@300;400;500&family=Share+Tech+Mono&display=swap" rel="stylesheet"></noscript>
+
+<style>
+/* Fallback fonts si Google Fonts no carga (offline) */
+:root {
+  --font-condensed: 'Barlow Condensed', 'Arial Narrow', Arial, sans-serif;
+  --font-body:      'Barlow', Arial, sans-serif;
+  --font-mono:      'Share Tech Mono', 'Courier New', monospace;
+}
+</style>
+
+<style>
+:root {
+  --bg:      #080c10;
+  --surface: #0e1520;
+  --border:  #1c2a3a;
+  --accent:  #00e5a0;
+  --blue:    #0066ff;
+  --warn:    #ff6b00;
+  --text:    #cdd8e3;
+  --muted:   #4a5c6e;
+  --glow:    0 0 28px rgba(0,229,160,0.3);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body { height: 100%; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100dvh;
+  padding: 24px 16px;
+  background-image:
+    radial-gradient(ellipse 90% 40% at 50% -5%, rgba(0,102,255,0.07) 0%, transparent 60%),
+    repeating-linear-gradient(90deg, transparent, transparent 39px, rgba(255,255,255,0.012) 39px, rgba(255,255,255,0.012) 40px),
+    repeating-linear-gradient(0deg,  transparent, transparent 39px, rgba(255,255,255,0.012) 39px, rgba(255,255,255,0.012) 40px);
+}
+
+/* scanline */
+body::after {
+  content: '';
+  position: fixed; inset: 0;
+  background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.025) 2px, rgba(0,0,0,0.025) 4px);
+  pointer-events: none;
+  z-index: 999;
+}
+
+/* ── Header ─────────────────────────────────────────────── */
+.header {
+  width: 100%; max-width: 440px;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+
+.logo-box {
+  width: 38px; height: 38px;
+  background: var(--accent);
+  border-radius: 9px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.logo-text {
+  font-family: var(--font-condensed);
+  font-weight: 700;
+  font-size: 21px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: white;
+  line-height: 1.1;
+}
+
+.logo-sub {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+.ver {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 3px 8px;
+}
+
+/* ── Card ───────────────────────────────────────────────── */
+.card {
+  width: 100%; max-width: 440px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  overflow: hidden;
+  position: relative;
+}
+
+.card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent 0%, var(--blue) 30%, var(--accent) 70%, transparent 100%);
+  opacity: 0.7;
+}
+
+/* ── Tab selector ───────────────────────────────────────── */
+.tabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border-bottom: 1px solid var(--border);
+}
+
+.tab {
+  background: none; border: none;
+  padding: 17px 8px;
+  cursor: pointer;
+  color: var(--muted);
+  font-family: var(--font-condensed);
+  font-size: 15px; font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  position: relative;
+  transition: color 0.18s, background 0.18s;
+  border-right: 1px solid var(--border);
+}
+
+.tab:last-child { border-right: none; }
+
+.tab .dot {
+  display: inline-block;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: middle;
+  margin-top: -2px;
+  transition: box-shadow 0.18s;
+}
+
+.tab.active { color: white; background: rgba(0,229,160,0.05); }
+
+.tab.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 2px;
+  background: var(--accent);
+}
+
+.tab[data-tank="super"]   .dot { background: #00e5a0; }
+.tab[data-tank="regular"] .dot { background: #0066ff; }
+.tab[data-tank="diesel"]  .dot { background: #ff6b00; }
+
+.tab[data-tank="super"].active   .dot { box-shadow: 0 0 8px #00e5a0; }
+.tab[data-tank="regular"].active .dot { box-shadow: 0 0 8px #0066ff; }
+.tab[data-tank="diesel"].active  .dot { box-shadow: 0 0 8px #ff6b00; }
+
+/* ── Input section ──────────────────────────────────────── */
+.inp-section {
+  padding: 26px 26px 18px;
+}
+
+.inp-label {
+  display: block;
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+
+.inp-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+#medida {
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 13px 18px;
+  font-family: var(--font-mono);
+  font-size: 32px;
+  color: white;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+}
+
+#medida::placeholder { color: var(--muted); font-size: 24px; }
+
+#medida:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(0,229,160,0.08);
+}
+
+.inp-unit {
+  font-family: var(--font-condensed);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  text-transform: uppercase;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+
+.inp-hint {
+  margin-top: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* ── Botón ──────────────────────────────────────────────── */
+.calc-btn {
+  display: block;
+  width: calc(100% - 52px);
+  margin: 0 26px 24px;
+  padding: 15px;
+  background: var(--accent);
+  color: #080c10;
+  border: none;
+  border-radius: 10px;
+  font-family: var(--font-condensed);
+  font-size: 17px; font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition: box-shadow 0.2s, transform 0.1s;
+}
+
+.calc-btn::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,0.18) 0%, transparent 55%);
+}
+
+.calc-btn:hover { box-shadow: var(--glow); }
+.calc-btn:active { transform: scale(0.98); }
+
+/* ── Resultado ──────────────────────────────────────────── */
+.result {
+  border-top: 1px solid var(--border);
+  padding: 22px 26px 26px;
+  min-height: 100px;
+  position: relative;
+}
+
+.result-label {
+  position: absolute;
+  top: 14px; right: 20px;
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  color: var(--muted);
+  font-family: var(--font-condensed);
+  text-transform: uppercase;
+}
+
+#res-idle {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 8px;
+}
+
+#res-ok {
+  display: none;
+  animation: fadeUp 0.28s ease;
+}
+
+#res-err {
+  display: none;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: var(--warn);
+  margin-top: 8px;
+  animation: fadeUp 0.22s ease;
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.res-number {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  line-height: 1;
+}
+
+.res-val {
+  font-family: var(--font-condensed);
+  font-weight: 900;
+  font-size: 68px;
+  color: var(--accent);
+  letter-spacing: -0.01em;
+}
+
+.res-unit {
+  font-family: var(--font-condensed);
+  font-size: 22px;
+  font-weight: 400;
+  color: var(--muted);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.res-meta {
+  margin-top: 12px;
+  display: flex;
+  gap: 22px;
+}
+
+.meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.meta-k {
+  font-family: var(--font-condensed);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+.meta-v {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text);
+}
+
+.meta-vacio .meta-v {
+  color: var(--warn);
+  font-size: 13px;
+  font-weight: bold;
+}
+
+.meta-vacio .meta-k {
+  color: var(--warn);
+  opacity: 0.7;
+}
+
+/* ── Install banner ─────────────────────────────────────── */
+#install-banner {
+  display: none;
+  width: 100%; max-width: 440px;
+  margin-top: 14px;
+  background: rgba(0,102,255,0.1);
+  border: 1px solid rgba(0,102,255,0.25);
+  border-radius: 10px;
+  padding: 13px 16px;
+  font-family: var(--font-condensed);
+  font-size: 15px; font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text);
+  cursor: pointer;
+  text-align: center;
+  transition: background 0.2s;
+}
+
+#install-banner:hover { background: rgba(0,102,255,0.18); }
+
+/* ── Footer ─────────────────────────────────────────────── */
+.footer {
+  margin-top: 18px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--muted);
+  letter-spacing: 0.08em;
+  opacity: 0.45;
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo">
+    <div class="logo-box">⛽</div>
+    <div>
+      <div class="logo-text">Tanques</div>
+      <div class="logo-sub">Medición de combustible</div>
+    </div>
+  </div>
+  <span class="ver">v2.0</span>
+</div>
+
+<div class="card">
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab active" data-tank="super"   onclick="selectTank(this)"><span class="dot"></span>Super</button>
+    <button class="tab"        data-tank="regular" onclick="selectTank(this)"><span class="dot"></span>Regular</button>
+    <button class="tab"        data-tank="diesel"  onclick="selectTank(this)"><span class="dot"></span>Diésel</button>
+  </div>
+
+  <!-- Input -->
+  <div class="inp-section">
+    <span class="inp-label">Lectura de varilla</span>
+    <div class="inp-wrap">
+      <input id="medida" placeholder="65.4" inputmode="decimal" autocomplete="off">
+      <span class="inp-unit">Pulg.<br>+ 8vos</span>
+    </div>
+    <div class="inp-hint">Ej: 65.3 = 65 y ³⁄₈ pulgadas</div>
+  </div>
+
+  <!-- Botón -->
+  <button class="calc-btn" onclick="calcular()">Calcular volumen</button>
+
+  <!-- Resultado -->
+  <div class="result">
+    <span class="result-label">Resultado</span>
+
+    <div id="res-idle">Ingresa una medida para calcular</div>
+
+    <div id="res-ok">
+      <div class="res-number">
+        <span class="res-val" id="rVal">—</span>
+        <span class="res-unit">gal</span>
+      </div>
+      <div class="res-meta">
+        <div class="meta"><span class="meta-k">Tanque</span><span class="meta-v" id="mTanque">—</span></div>
+        <div class="meta meta-vacio"><span class="meta-k">Vacío</span><span class="meta-v" id="mVacio">—</span></div>
+        <div class="meta"><span class="meta-k">Altura real</span><span class="meta-v" id="mAltura">—</span></div>
+        <div class="meta"><span class="meta-k">Volumen</span><span class="meta-v" id="mVol">—</span></div>
+      </div>
+    </div>
+
+    <div id="res-err">⚠ Ingresa una medida válida</div>
+  </div>
+
+</div>
+
+<button id="install-banner" onclick="instalarApp()">📲 Instalar app en este dispositivo</button>
+
+<div class="footer">GRUPORVQ · OFFLINE-READY PWA</div>
+
+<script>
+const tanques = {
+  super:   { diametro: 117.969, largo: 213.323, label: 'Super'   },
+  regular: { diametro: 117.975, largo: 213.402, label: 'Regular' },
+  diesel:  { diametro: 117.981, largo: 213.545, label: 'Diésel'  }
+}
+
+let activo = 'super'
+
+function selectTank(btn) {
+  document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'))
+  btn.classList.add('active')
+  activo = btn.dataset.tank
+  idle()
+}
+
+function convertirAltura(v) {
+  let p = v.split('.')
+  let in_ = parseInt(p[0])
+  let frac = 0
+  if (p[1]) { let f = parseInt(p[1]); if (f >= 1 && f <= 7) frac = f / 8 }
+  return in_ + frac
+}
+
+function calcular() {
+  let medida = document.getElementById('medida').value.trim()
+  if (!medida) { error(); return }
+
+  let h = convertirAltura(medida) + (2 / 8)
+  let { diametro, largo, label } = tanques[activo]
+  let R = diametro / 2, L = largo
+
+const CAPACIDAD_MAX = 10000 // galones
+
+  let vol = L * (R*R * Math.acos((R-h)/R) - (R-h) * Math.sqrt(2*R*h - h*h))
+  let gal = Math.round(vol / 231)
+  let vacio = CAPACIDAD_MAX - gal
+
+  document.getElementById('rVal').textContent    = gal.toLocaleString('es')
+  document.getElementById('mTanque').textContent = label
+  document.getElementById('mVacio').textContent  = vacio.toLocaleString('es') + ' gal'
+  document.getElementById('mAltura').textContent = h.toFixed(3) + '"'
+  document.getElementById('mVol').textContent    = Math.round(vol).toLocaleString('es') + ' in³'
+
+  document.getElementById('res-idle').style.display = 'none'
+  document.getElementById('res-err').style.display  = 'none'
+  let ok = document.getElementById('res-ok')
+  ok.style.display = 'none'; void ok.offsetWidth; ok.style.display = 'block'
+}
+
+function idle()  { document.getElementById('res-idle').style.display='block'; document.getElementById('res-ok').style.display='none'; document.getElementById('res-err').style.display='none' }
+function error() { document.getElementById('res-idle').style.display='none';  document.getElementById('res-ok').style.display='none'; document.getElementById('res-err').style.display='block' }
+
+document.getElementById('medida').addEventListener('keydown', e => { if (e.key==='Enter') calcular() })
+
+// PWA
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('./service-worker.js').catch(()=>{}))
+}
+
+let deferredPrompt = null
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault(); deferredPrompt = e
+  document.getElementById('install-banner').style.display = 'block'
+})
+function instalarApp() {
+  if (!deferredPrompt) return
+  deferredPrompt.prompt()
+  deferredPrompt.userChoice.then(() => { deferredPrompt = null; document.getElementById('install-banner').style.display = 'none' })
+}
+window.addEventListener('appinstalled', () => { document.getElementById('install-banner').style.display = 'none' })
+</script>
+</body>
+</html>
